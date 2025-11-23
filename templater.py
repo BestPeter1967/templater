@@ -69,7 +69,7 @@ if __name__ == "__main__":
 def cmake(mode=CMAKE_PLAIN):
     if mode == CMAKE_RX :
         return """if( COMMAND CMAKE_MINIMUM_REQUIRED )
-    cmake_minimum_required(VERSION 3.6)
+    cmake_minimum_required(VERSION 3.16)
 endif( COMMAND CMAKE_MINIMUM_REQUIRED )
 
 ####################################################################################
@@ -79,9 +79,13 @@ project(RX63NProject)
 set(CMAKE_CXX_STANDARD 14)
 enable_language(C CXX ASM)
 
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
+if (NOT CMAKE_CROSSCOMPILING)
+    set (ENABLE_UNITTESTING ON)
+else()
+    set (ENABLE_UNITTESTING OFF)
+endif()
 
 ####################################################################################
 # Project specific settings
@@ -139,10 +143,11 @@ set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "-Wl,--gc-sections -
 # Add support for Tests
 ####################################################################################
 macro(TESTCASE name)
-    enable_testing()
-    add_executable(UT_${name} ${CMAKE_CURRENT_SOURCE_DIR}/unittests/UT_${name}.cpp)
+if (ENABLE_UNITTESTING)
+    add_executable(UT_${name} ${CMAKE_CURRENT_SOURCE_DIR}/UT_${name}.cpp)
     target_link_libraries(UT_${name} PRIVATE tsunit)
     add_test(NAME UT_${name} COMMAND ${CMAKE_CURRENT_BINARY_DIR}/UT_${name})
+endif()
 endmacro()
 
 ####################################################################################
@@ -154,10 +159,16 @@ endmacro()
 # Additional Directories to deal with...
 ####################################################################################
 # add_subdirectory(lib)
+if (ENABLE_UNITTESTING)
+    enable_testing()
+    add_subdirectory(tsunit)
+    add_subdirectory(unittests)
+endif()
+
 """
     elif mode == CMAKE_AVR :
         return """if( COMMAND CMAKE_MINIMUM_REQUIRED )
-    CMAKE_MINIMUM_REQUIRED(VERSION 3.6)
+    CMAKE_MINIMUM_REQUIRED(VERSION 3.16)
 endif( COMMAND CMAKE_MINIMUM_REQUIRED )
 
 ####################################################################################
@@ -285,16 +296,6 @@ add_custom_target(flash_fuses
 )
 
 ####################################################################################
-# Add support for Tests
-####################################################################################
-macro(TESTCASE name)
-    enable_testing()
-    add_executable(UT_${name} ${CMAKE_CURRENT_SOURCE_DIR}/unittests/UT_${name}.cpp)
-    target_link_libraries(UT_${name} PRIVATE tsunit)
-    add_test(NAME UT_${name} COMMAND ${CMAKE_CURRENT_BINARY_DIR}/UT_${name})
-endmacro()
-
-####################################################################################
 # Additional Directories to deal with...
 ####################################################################################
 # add_subdirectory(lib)
@@ -342,7 +343,7 @@ endif(APPLE)
             macStr2=""
 
         return"""if( COMMAND CMAKE_MINIMUM_REQUIRED )
-    CMAKE_MINIMUM_REQUIRED(VERSION 3.6)
+    CMAKE_MINIMUM_REQUIRED(VERSION 3.16)
 endif( COMMAND CMAKE_MINIMUM_REQUIRED )
 
 ####################################################################################
@@ -350,36 +351,17 @@ endif( COMMAND CMAKE_MINIMUM_REQUIRED )
 ####################################################################################
 project(Project)
 set(CMAKE_CXX_STANDARD 14)
-enable_language(C CXX ASM)
+enable_language(C CXX)
 
-include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
+if (NOT CMAKE_CROSSCOMPILING)
+    set (ENABLE_UNITTESTING ON)
+else()
+    set (ENABLE_UNITTESTING OFF)
+endif()
 
 %s
-####################################################################################
-# Make sure the compiler can find include files from our project.
-####################################################################################
-# link_directories(lib1 lib2 ...)
-# if(CMAKE_HOST_WIN32)
-#   add_definitions("-DWIN32_LEAN_AND_MEAN -Dsnprintf=_snprintf_s /wd4068 /wd4996 /GR- /EHsc /MDd")
-# elseif (CMAKE_HOST_UNIX)
-#   set(libSrcs unixtool.c)
-# elseif()
-#   message(FATAL_ERROR "Platform not supported!")
-# endif()
-
-####################################################################################
-# The libs to build to.
-####################################################################################
-# add_library(${PROJECT_NAME} STATIC file1.c)
-# add_library(namespace::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
-
-#target_sources(${PROJECT_NAME}
-#PUBLIC
-#    file1.c
-#)
-
 ####################################################################################
 # The executeable(s) to build to.
 ####################################################################################
@@ -387,7 +369,7 @@ add_executable(${PROJECT_NAME} "")
 
 target_sources(${PROJECT_NAME}
 PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
+    "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
 )
 
 #target_compile_definitions(${PROJECT_NAME}
@@ -406,9 +388,11 @@ add_library(tsunit STATIC "")
 
 target_sources(tsunit
 PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/tsunit/TSUnit.hpp
+    "${CMAKE_CURRENT_SOURCE_DIR}/tsunit/TSUnit.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tsunit/TSUnitTestAddOns.hpp"
 PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/tsunit/TSUnit.cpp
+    "${CMAKE_CURRENT_SOURCE_DIR}/tsunit/TSUnit.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tsunit/TSUnitTestAddOns.cpp"
 )
 
 target_include_directories(tsunit
@@ -422,10 +406,12 @@ PUBLIC
 )
 
 macro(TESTCASE name)
+if (ENABLE_UNITTESTING)
     enable_testing()
-    add_executable(UT_${name} ${CMAKE_CURRENT_SOURCE_DIR}/unittests/UT_${name}.cpp)
+    add_executable(UT_${name} ${CMAKE_CURRENT_SOURCE_DIR}/UT_${name}.cpp)
     target_link_libraries(UT_${name} PUBLIC tsunit)
     add_test(NAME UT_${name} COMMAND ${CMAKE_CURRENT_BINARY_DIR}/UT_${name})
+endif()
 endmacro()
 ####################################################################################
 # The unitttest tests to build to.
@@ -436,7 +422,11 @@ endmacro()
 ####################################################################################
 # Additional Directories to deal with...
 ####################################################################################
-# add_subdirectory(lib)
+if (ENABLE_UNITTESTING)
+    enable_testing()
+    add_subdirectory(tsunit)
+    add_subdirectory(unittests)
+endif()
 
 # install(TARGETS ${PROJECT_NAME} DESTINATION /usr/bin)
 """% (macStr1, macStr2)
@@ -1457,18 +1447,26 @@ def templateTSUnitTestAddOns_CPP():
 
 namespace tsunit {
 
-static uint32_t _rot32r(uint32_t inNum, unsigned int places)
+static std::uint32_t _rot32r(std::uint32_t inNum, unsigned int places)
 {
     places &= 0x1f;
     return (inNum >> places) | (inNum << (32-places));
 }
 
-template<size_t FROM_POS, size_t TO_POS>
-constexpr static uint32_t _swapBits(uint32_t inValue)
+template<unsigned int FROM_POS,unsigned int TO_POS>
+constexpr static std::uint32_t _swapBits(std::uint32_t inValue)
 {
-    return (FROM_POS < TO_POS) ?
-        ((inValue & (1ul<<FROM_POS)) << (TO_POS-FROM_POS)) | ((inValue & (1ul<<  TO_POS)) >> (TO_POS-FROM_POS)) :
-        ((inValue & (1ul<<TO_POS))   << (FROM_POS-TO_POS)) | ((inValue & (1ul<<FROM_POS)) >> (FROM_POS-TO_POS));
+    constexpr unsigned int shiftDistance = (TO_POS >= FROM_POS ?
+    		TO_POS - FROM_POS
+          : FROM_POS - TO_POS);
+
+    constexpr uint32_t from_mask = (1ul<<FROM_POS);
+    constexpr uint32_t to_mask   = (1ul<<TO_POS);
+    constexpr uint32_t all_mask = from_mask | to_mask;
+
+    return  (inValue & ~all_mask)
+            | ( ((inValue & from_mask) << shiftDistance)
+            | ((inValue & to_mask)   >> shiftDistance));
 }
 
 // =======================================================================================
@@ -1722,7 +1720,7 @@ def writeTemplate(template, target):
             print ("Written " + target)
 
 def usage():
-    version="1.7.9"
+    version="1.7.10"
     print ("%s V %s" % ((os.path.basename(sys.argv[0])), version))
     print ("Usage: [-v] %s templatename" % (os.path.basename(sys.argv[0])))
     print ("templatename is one of Python, CMake, CMakeMac, CMakeAVR, CMakeRX, GMock, cppunit, tsunit, Main, MainAVR. VHDL.")
